@@ -6,7 +6,7 @@ Created on Sat Mar 26 11:35:24 2022
 """
 import torch
 
-def precon(self, V, C, sigma):
+def precon_terms(V, C, sigma):
     """
     Terms that commonly appear in GP approximations for preconditioning:
         
@@ -22,7 +22,7 @@ def precon(self, V, C, sigma):
         
     This routine will compute and return all of A, B, L_B and L.
     """
-    jitter = lambda x: 0.0001 * torch.eye(x)
+    jitter = lambda x: 0.00001 * torch.eye(x)
     m, n = V.shape
     L = torch.linalg.cholesky(C + jitter(m))
     
@@ -34,19 +34,3 @@ def precon(self, V, C, sigma):
     L_B = torch.linalg.cholesky(B)
     
     return A, B, L_B, L
-
-n, d = 100, 1
-X = torch.rand(n, d)
-jitter = lambda x: 0.00001*torch.eye(x)
-sigma = 1.
-
-from gpytorch.kernels.rbf_kernel import RBFKernel
-kernel = RBFKernel()
-K_xx = kernel(X).evaluate().detach()
-L = torch.linalg.cholesky(K_xx + jitter(n))
-
-y_ = torch.normal(0, 1, size=[n,d])
-y_obs = L @ y_
-
-sol = torch.linalg.inv(K_xx + sigma ** 2 * torch.eye(n)) @ y_obs
-print(sol)
