@@ -4,7 +4,7 @@ Created on Sat Mar 26 11:35:24 2022
 
 @author: adayr
 """
-import torch
+import torch, startup
 
 def precon_terms(V, C, sigma):
     """

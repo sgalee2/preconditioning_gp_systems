@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Apr  1 12:08:23 2022
-
-@author: sgalee2
-"""
+import startup
 
 from gpytorch.utils.linear_cg import linear_cg
 from gpytorch.settings import cg_tolerance, max_cg_iterations, max_cholesky_size, max_preconditioner_size

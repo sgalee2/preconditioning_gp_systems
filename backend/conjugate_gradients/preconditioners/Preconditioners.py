@@ -4,7 +4,7 @@ Created on Sat Mar 26 11:39:37 2022
 
 @author: adayr
 """
-import torch
+import torch, startup
 from backend.conjugate_gradients.utils.common_terms import *
 
 class Preconditioner(object):
@@ -86,4 +86,3 @@ class Nystrom(Preconditioner):
             
         return prod
         
-    
