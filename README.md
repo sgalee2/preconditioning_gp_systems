@@ -27,7 +27,11 @@ where &theta; is a vector of hyperparameters which define the kernel. The overhe
  
  ### Preconditioners
  
- It is standard to use an incomplete Cholesky decomposition as an out of the box preconditioner for GPs. However, we explore the posibility of using well-studied GP approximations as system preconditioners for exact GP regression.
+ It is standard to use an incomplete Cholesky decomposition as an out of the box preconditioner for GPs. However, we explore a family of preconditioners as alternative strategies in improving iGP inference. We also explore the possibility of using probabilistic preconditioners such as a Monte Carlo approximation for Conjugate Gradients.
+ 
+ ### iGP Settings
+ 
+ We vary the parameters of Conjugate Gradients to explore its validity as an inference tool. These settings include but are not limited to CG exit tolerance, CG iterations, preconditioner size/rank, learning rate.
  
  # Contact
  I can be found via email at sgalee2@liverpool.ac.uk
