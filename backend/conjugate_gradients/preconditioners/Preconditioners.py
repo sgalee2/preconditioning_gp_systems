@@ -5,7 +5,7 @@ Created on Sat Mar 26 11:39:37 2022
 @author: adayr
 """
 import torch, startup
-from backend.conjugate_gradients.utils.common_terms import *
+from backend.conjugate_gradients.utils.common_terms import precon_terms
 
 class Preconditioner(object):
     
