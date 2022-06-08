@@ -23,7 +23,7 @@ def precon_terms(V, C, sigma):
         
     This routine will compute and return all of A, B, L_B and L.
     """
-    jitter = lambda x: 0.00001 * torch.eye(x)
+    jitter = lambda x: 0.000001 * torch.eye(x)
     m, n = V.shape
     L = torch.linalg.cholesky(C + jitter(m))
     

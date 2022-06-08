@@ -4,85 +4,39 @@ Created on Sat Mar 26 11:39:37 2022
 
 @author: adayr
 """
-import torch, startup
+import torch, startup, gpytorch
 from backend.conjugate_gradients.utils.common_terms import precon_terms
+from gpytorch.lazy.non_lazy_tensor import lazify
+from gpytorch.lazy.lazy_tensor import LazyTensor
 
-class Preconditioner(object):
+def svd_preconditioner(self):
+    """
+    Calling this needs to return a tuple:
+        (preconditioner_closure, preconditioner_matrix, preconditioner_logdet)
+    using Torch tensor arithmetic.
+    """
+    if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
+            return None, None, None
+    A = self._lazy_tensor
+    k = gpytorch.settings.max_preconditioner_size.value()
+    U, S, V = A.svd()
+    U_, S_ = U[:,0:k], S[0:k]
+    log_det = S_[0:k].log().sum()
     
-    def mvp(self, v):
-        raise NotImplementedError
-        
-    def imvp(self, v):
-        raise NotImplementedError()
+    precon_lt = gpytorch.lazy.root_lazy_tensor.RootLazyTensor(U_.evaluate() * S_**(0.5))
+    
+    def precon_closure(rhs):
+        return torch.linalg.inv(U_ @ torch.diag(S_) @ U_.evaluate().T + self._diag_tensor.evaluate()) @ rhs
+    
+    return precon_closure, precon_lt, log_det
 
-class Nystrom(Preconditioner):
-    def __init__(self, K_ux = None, K_uu = None, sigma = None):
-        if K_ux is not None:
-            self.K_ux = K_ux
-            self.m, self.n = K_ux.shape
+from gpytorch.lazy import AddedDiagLazyTensor, DiagLazyTensor, RootLazyTensor
 
-        if K_uu is not None:
-            self.K_uu = K_uu
-        if sigma is not None:
-            self.sigma = sigma
-            if abs(self.sigma) < 1e-1:
-                self.safe_woodbury = False
-            else:
-                self.safe_woodbury = True
-        
-    def set_U(self, U):
-        self.K_ux = U
-        
-    def set_V(self, V):
-        self.K_xu = V
-        
-    def set_C(self, C):
-        self.K_uu = C
-        
-    def set_sigma(self, sigma):
-        self.sigma = sigma
-        
-    def mvp(self, v):
-        """
-        
+seed = 4
+torch.random.manual_seed(seed)
 
-        Parameters
-        ----------
-        v : rhs vector
+tensor = torch.randn(1000, 800)
+diag = torch.abs(torch.randn(1000))
 
-        Returns
-        -------
-        sol: returns P^{-1}v
-        
-        Given K_xu and K_uu, we compute the quantities:
-            A = sigma ** -1 L^{-1} K_ux, B = AA^T + I
-        and then the mvp
-            Pv = (K_xu K_uu K_xu + sigma ** 2 I)^{-1} v = 1/sigma ** 2 [v - A^B^{-1}A^Tv]
-        If safe_woodbury is False, use the computed solution at the risk of large errors.
-        We will instead provide the scaled solution vector and sigma for timesing through.
-
-        """
-        if self.safe_woodbury == True:
-            tri_solve = torch.triangular_solve
-            A, B, L_B, L = precon_terms(self.K_ux, self.K_uu, self.sigma)
-            
-            a_til = tri_solve(A, L_B, upper=False).solution
-            a_til_v = a_til @ v
-            inner = a_til.T @ a_til_v 
-            
-            prod = v - inner
-            prod = prod / self.sigma ** 2
-            
-        else:
-            tri_solve = torch.triangular_solve
-            A, B, L_B, L = precon_terms(self.K_ux, self.K_uu, self.sigma)
-            
-            a_til = tri_solve(A, L_B, upper=False).solution
-            a_til_v = a_til @ v
-            inner = a_til.T @ a_til_v 
-            
-            prod = v - inner
-            prod = [prod, self.sigma ** 2]
-            
-        return prod
-        
+standard_lt = AddedDiagLazyTensor(RootLazyTensor(tensor), DiagLazyTensor(diag))
+evals, evecs = standard_lt.symeig(eigenvectors=True)
