@@ -16,5 +16,5 @@ from gpytorch.settings import (
     cg_tolerance,
     max_preconditioner_size,
     max_cholesky_size,
-    cholesky_jitter,
+    cholesky_jitter
 )
