@@ -97,7 +97,7 @@ class AddedDiagLazyTensor_rng(AddedDiagLazyTensor):
     
     def __init__(self, *lazy_tensors, preconditioner_override=None, distribution=None):
         
-        super(AddedDiagLazyTensor_rng, self).__init__(*lazy_tensors, preconditioner_override=None)
+        super(AddedDiagLazyTensor_rng, self).__init__(*lazy_tensors, preconditioner_override=preconditioner_override)
         
         self.distribution = distribution
 
