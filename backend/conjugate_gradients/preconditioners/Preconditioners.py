@@ -101,22 +101,4 @@ class AddedDiagLazyTensor_rng(AddedDiagLazyTensor):
         
         self.distribution = distribution
 
-n = 3000
-m = 50
-A = torch.rand(n,m)
-A_ = gpytorch.lazy.RootLazyTensor(A)
-diag = DiagLazyTensor(2. * torch.ones(n))
-rhs = torch.rand(n,1)
-
-import math
-k = int( math.sqrt(n) )
-gpytorch.settings.min_preconditioning_size._set_value(1)
-gpytorch.settings.max_preconditioner_size._set_value(1)
-
-distribution = torch.distributions.Normal(0.,1.)
-
-standard_lt = AddedDiagLazyTensor(A_, diag)
-overrode_lt = AddedDiagLazyTensor(A_, diag, preconditioner_override=rSVD_Preconditioner)
-
-sol = torch.linalg.inv( standard_lt.evaluate() ) @ rhs
 
