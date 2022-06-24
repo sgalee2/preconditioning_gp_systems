@@ -5,13 +5,7 @@ Created on Sat Mar 26 11:39:37 2022
 @author: adayr
 """
 import torch, startup, gpytorch
-from backend.conjugate_gradients.utils.common_terms import precon_terms
-from gpytorch.lazy.non_lazy_tensor import lazify
-from gpytorch.lazy.lazy_tensor import LazyTensor
-from gpytorch.utils.linear_cg import linear_cg
-
 from gpytorch.lazy import AddedDiagLazyTensor, DiagLazyTensor, RootLazyTensor
-from gpytorch.lazy.non_lazy_tensor import lazify
     
 def Eig_Preconditioner(self):
     
@@ -61,17 +55,21 @@ def rSVD_Preconditioner(self):
         
         from gpytorch.lazy.matmul_lazy_tensor import MatmulLazyTensor
         
+        #get quantities & form sample matrix
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
         omega = torch.distributions.normal.Normal(0.,1.).sample([n, k])
         
+        #Z = A @ Omega = Q @ R
         Z = MatmulLazyTensor(self._lazy_tensor, omega)
         
         Q, R = Z.evaluate().qr()
         
+        #Y = Q^T @ A = U @ S @ V
         Y = MatmulLazyTensor(Q.T, self._lazy_tensor)
         
         U, S, V = Y.evaluate().svd()
         
+        #L = V @ S^0.5
         L = V * (S ** 0.5)
         
         self._piv_chol_self = L
@@ -93,12 +91,5 @@ def rSVD_Preconditioner(self):
 
     return (precondition_closure, self._precond_lt, self._precond_logdet_cache)
         
-class AddedDiagLazyTensor_rng(AddedDiagLazyTensor):
-    
-    def __init__(self, *lazy_tensors, preconditioner_override=None, distribution=None):
-        
-        super(AddedDiagLazyTensor_rng, self).__init__(*lazy_tensors, preconditioner_override=preconditioner_override)
-        
-        self.distribution = distribution
 
 
