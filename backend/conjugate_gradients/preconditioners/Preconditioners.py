@@ -46,8 +46,7 @@ def Eig_Preconditioner(self):
     return (precondition_closure, self._precond_lt, self._precond_logdet_cache)
 
 def rSVD_Preconditioner(self):
-    
-    
+    print("using rsvd")    
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     
@@ -57,7 +56,7 @@ def rSVD_Preconditioner(self):
         
         #get quantities & form sample matrix
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
-        omega = torch.distributions.normal.Normal(0.,1.).sample([n, k])
+        omega = torch.distributions.normal.Normal(0.,1.).sample([n, k + 4])
         
         #Z = A @ Omega = Q @ R
         Z = MatmulLazyTensor(self._lazy_tensor, omega)
@@ -91,5 +90,3 @@ def rSVD_Preconditioner(self):
 
     return (precondition_closure, self._precond_lt, self._precond_logdet_cache)
         
-
-
