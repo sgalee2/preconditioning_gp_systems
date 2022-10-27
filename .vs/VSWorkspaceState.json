@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\bayesian_benchmarks",
+    "\\bayesian_benchmarks\\tests",
+    "\\PyTorch-LBFGS\\examples",
+    "\\PyTorch-LBFGS\\examples\\Gaussian_Processes"
+  ],
+  "SelectedNode": "\\bayesian_benchmarks\\tests\\test_data.py",
+  "PreviewInSolutionExplorer": false
+}
