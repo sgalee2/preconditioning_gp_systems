@@ -3,13 +3,13 @@ import gpytorch
 import time
 import math
 
-from model import Model
+from backend.models.model import Model
 from backend.functions.Functions import *
 from backend.conjugate_gradients.preconditioners.Preconditioners import *
 
 class GPRegressionModel(Model):
     
-    def __init__(self, reg_model, likelihood, loss_fn, optimizer, cuda=False, precon_override=None):
+    def __init__(self, reg_model, likelihood, loss_fn, optimizer, cuda=False, precon_override=None, ard=False):
         
         self.model = reg_model
         self.likelihood = likelihood
@@ -17,6 +17,10 @@ class GPRegressionModel(Model):
         self.optimizer = optimizer
         self.cuda = cuda
         self.precon_override = precon_override
+        self.devices = [torch.device('cuda', i)
+                        for i in range(torch.cuda.device_count())]
+        self.output_device = self.devices[0]
+        self.ard = ard
         
         try:
             self.model.covar_module.base_kernel
@@ -26,9 +30,11 @@ class GPRegressionModel(Model):
         
     def Fit(self, X, y, lr, iters, *params):
         
-        if self.cuda:
-            X.cuda(), y.cuda(), self.model.cuda(), self.likelihood.cuda()
-            
+        self.outputscale, self.lengthscale, self.noise = self.get_model_params()
+        
+        #need to fix CUDA
+        if self.cuda is True:
+            X.to(self.output_device), y.to(self.output_device), self.model.to(self.output_device), self.likelihood.to(self.output_device)
         
         #set model & likelihood to train mode
         self.model.train()
@@ -37,31 +43,89 @@ class GPRegressionModel(Model):
         #define optimizer environment
         optimizer = self.optimizer(self.model.parameters(), lr = lr)
         
+        #start training
         print("Starting training...","\n")
         start_time = time.time()
+        iteration_times = torch.tensor([[0]])
+        self.loss = torch.tensor([[0]])
         
         for i in range(iters):
+            iter_time = time.time()
             optimizer.zero_grad()
             with gpytorch.settings.max_cholesky_size(0):
                 loss = self.loss_fn(self.model, self.likelihood, X, y, self.precon_override)
             loss.backward()
+            self.loss = torch.vstack([self.loss, loss.cpu()])
             
             if self.bker:
                 
-                print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
+                print('Iter %d/%d - Loss: %.3f' % (
                     i + 1, iters, loss.item(),
-                    self.model.covar_module.base_kernel.lengthscale.item(),
-                    self.model.likelihood.noise.item()
                 ))
                 print("\n")
             else:
                 
-                print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
+                print('Iter %d/%d - Loss: %.3f' % (
                     i + 1, iters, loss.item(),
-                    self.model.covar_module.lengthscale.item(),
-                    self.model.likelihood.noise.item()
                 ))
                 print("\n")
             optimizer.step()
-        print("Finished training. Elapsed time: {}".format(time.time() - start_time))
+            outputscale, lengthscale, noise = self.get_model_params()
+            self.outputscale, self.lengthscale, self.noise = torch.vstack([self.outputscale, outputscale]), torch.vstack([self.lengthscale, lengthscale]), torch.vstack([self.noise, noise])
+            iteration_times = torch.vstack([iteration_times, torch.tensor([[time.time() - iter_time]])])
+            
+        finish_time = time.time()
+        self.training_time = finish_time - start_time
+        self.iteration_times = iteration_times[1:, :]
+        self.loss = self.loss[1:, :]
+
+        print("Finished training. Elapsed time: {}".format(self.training_time))
+        
+    def Predict(self, Xs):
+        
+        if self.cuda:
+            Xs.cuda()
+            
+        self.model.eval()
+        self.likelihood.eval()
+        
+        print("Beginning predictions...")
+        start_time = time.time()
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            self.latent_pred = self.model(Xs)
+            self.post_pred = self.likelihood(self.latent_pred)
+            mean, var = self.post_pred.mean, self.post_pred.variance
+        print("Finished predicting. Elapsed time: {}".format(time.time() - start_time))
+        return mean, var
+        
+    def get_model_params(self):
+        
+        if self.bker:
+            outputscale = self.model.covar_module.outputscale.detach()
+            lengthscale = self.model.covar_module.base_kernel.lengthscale.detach()
+        else:
+            outputscale = torch.ones([1])
+            lengthscale = self.model.covar_module.lengthscale.detach()
+        
+        noise = self.model.likelihood.noise.detach()
+        
+        return outputscale.cpu(), lengthscale.cpu(), noise.cpu()
+            
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
                 

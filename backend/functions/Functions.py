@@ -3,7 +3,7 @@ import torch, startup, gpytorch, math
 from gpytorch.distributions import MultivariateNormal
 
 from linear_operator.operators import AddedDiagLinearOperator, DiagLinearOperator, RootLinearOperator
-from backend.conjugate_gradients.preconditioners.Preconditioners import Eig_Preconditioner, rSVD_Preconditioner, rSVD_Preconditioner_cuda, nystrom_SVD
+from backend.conjugate_gradients.preconditioners.Preconditioners import Eig_Preconditioner, rSVD_Preconditioner, rSVD_Preconditioner_cuda
 
 def GP_nll(model, likelihood, train_x, target, precon_override=None):
     

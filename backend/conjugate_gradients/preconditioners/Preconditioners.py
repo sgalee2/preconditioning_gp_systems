@@ -48,27 +48,75 @@ def Eig_Preconditioner(self):
 
     return (precondition_closure, self._precond_lt, self._precond_logdet_cache)
 
-def nystrom_SVD(self):
+def Nystrom_Preconditioner(self):
+    
     print("Sampling columns for preconditioner...")
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     
     if self._q_cache is None:
         
-        import math
+        n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
+        indices = torch.randint(low=0, high=n, size=[k])
+        KS = self._linear_op[:, indices]
+        SKS = KS[indices,:]
+        
+        L_ = torch.linalg.cholesky(SKS.evaluate() + 10e-4*torch.eye(k))
+        L_ = torch.linalg.inv(L_.T)
+        
+        KSL = KS @ L_
+        
+        # diff = torch.zeros(n)
+        # for i in range(n):
+        #     diff[i] = 1 - sum(KSL[i] ** 2)
+        # self._diag_tensor += linear_operator.operators.DiagLinearOperator(diff)
+        
+        self._piv_chol_self = KSL
+        
+        if torch.any(torch.isnan(self._piv_chol_self)).item():
+            warnings.warn(
+                "NaNs encountered in preconditioner computation. Attempting to continue without preconditioning.",
+                NumericalWarning,
+            )
+            return None, None, None
+        self._init_cache()
+        
+    def precondition_closure(tensor):
+        # This makes it fast to compute solves with it
+        qqt = self._q_cache.matmul(self._q_cache.transpose(-2, -1).matmul(tensor))
+        if self._constant_diag:
+            return (1 / self._noise) * (tensor - qqt)
+        return (tensor / self._noise) - qqt
+
+    return (precondition_closure, self._precond_lt, self._precond_logdet_cache)
+    
+
+def recursiveNystrom_Preconditioner(self):
+    
+    from recursive_nystrom.recursive_nystrom_gpytorch import recursiveNystrom
+    
+    print("Sampling columns for preconditioner...")
+    if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
+        return None, None, None
+    
+    if self._q_cache is None:
         
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
-        index = torch.randint(0,n, size=[k])
-        S_ = self._linear_op[index].evaluate()/math.sqrt(k/n)
-        mat = S_ @ S_.T
+        indices = recursiveNystrom(self._linear_op, k)
+        KS = self._linear_op[:, indices]
+        SKS = KS[indices,:]
         
-        U,S,V = torch.linalg.svd(mat)
+        L_ = torch.linalg.cholesky(SKS.evaluate() + 10e-4*torch.eye(k))
+        L_ = torch.linalg.inv(L_.T)
         
-        L = S_.T @ U
-        L = L / torch.norm(L, dim=0)
-        L *= S ** 0.25
+        KSL = KS @ L_
         
-        self._piv_chol_self = L
+        # diff = torch.zeros(n)
+        # for i in range(n):
+        #     diff[i] = 1 - sum(KSL[i] ** 2)
+        # self._diag_tensor += linear_operator.operators.DiagLinearOperator(diff)
+        
+        self._piv_chol_self = KSL
         
         if torch.any(torch.isnan(self._piv_chol_self)).item():
             warnings.warn(
