@@ -93,7 +93,7 @@ def Nystrom_Preconditioner(self):
 
 def recursiveNystrom_Preconditioner(self):
     
-    from recursive_nystrom.recursive_nystrom_gpytorch import recursiveNystrom
+    from backend.sampling.recursive_nystrom_gpytorch import recursiveNystrom
     
     print("Sampling columns for preconditioner...")
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():

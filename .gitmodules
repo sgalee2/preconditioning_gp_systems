@@ -7,3 +7,6 @@
 [submodule "recursive-nystrom"]
 	path = recursive-nystrom
 	url = https://github.com/axelv/recursive-nystrom.git
+[submodule "Randomly-Pivoted-Cholesky"]
+	path = Randomly-Pivoted-Cholesky
+	url = https://github.com/sgalee2/Randomly-Pivoted-Cholesky.git

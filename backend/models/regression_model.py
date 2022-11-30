@@ -7,6 +7,19 @@ from backend.models.model import Model
 from backend.functions.Functions import *
 from backend.conjugate_gradients.preconditioners.Preconditioners import *
 
+class base_model(gpytorch.models.ExactGP):
+    
+    def __init__(self, train_x, train_y, likelihood, mean, covar):
+        
+        super(base_model, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = mean
+        self.covar_module = covar
+        
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
 class GPRegressionModel(Model):
     
     def __init__(self, reg_model, likelihood, loss_fn, optimizer, cuda=False, precon_override=None, ard=False):
@@ -21,6 +34,7 @@ class GPRegressionModel(Model):
                         for i in range(torch.cuda.device_count())]
         self.output_device = self.devices[0]
         self.ard = ard
+        self.iteration_times = None
         
         try:
             self.model.covar_module.base_kernel
@@ -77,7 +91,7 @@ class GPRegressionModel(Model):
         finish_time = time.time()
         self.training_time = finish_time - start_time
         self.iteration_times = iteration_times[1:, :]
-        self.loss = self.loss[1:, :]
+        self.loss = self.loss[1:, :].detach()
 
         print("Finished training. Elapsed time: {}".format(self.training_time))
         

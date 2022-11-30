@@ -23,4 +23,12 @@ def GP_nll(model, likelihood, train_x, target, precon_override=None):
     return loss
 
     
+def exact_log_det(linear_operator):
     
+    try:
+        L = linear_operator.cholesky()
+    except:
+        L = torch.linalg.cholesky(linear_operator)
+        
+    log_det = 2 * sum( torch.log(L.diag()) )
+    return log_det.item()

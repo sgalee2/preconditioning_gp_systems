@@ -11,30 +11,6 @@ from tqdm import tqdm
 import gc
 
 
-def gauss(X: np.ndarray, Y: np.ndarray=None, gamma=0.01):
-    # todo make this implementation more python like!
-
-    if Y is None:
-        Ksub = np.ones((X.shape[0], 1))
-    else:
-        nsq_rows = np.sum(X ** 2, axis=1, keepdims=True)
-        nsq_cols = np.sum(Y ** 2, axis=1, keepdims=True)
-        Ksub = nsq_rows - np.matmul(X, Y.T * 2)
-        Ksub = nsq_cols.T + Ksub
-        Ksub = np.exp(-gamma * Ksub)
-
-    return Ksub
-
-
-def uniformNystrom(X, n_components: int, kernel_func=gauss):
-    indices = np.random.choice(X.shape[0], n_components)
-    C = kernel_func(X, X[indices,:])
-    SKS = C[indices, :]
-    W = np.linalg.inv(SKS + 10e-6 * np.eye(n_components))
-
-    return C, W
-
-
 def recursiveNystrom(K, n_components: int, accelerated_flag=False, random_state=None, lmbda_0=0, return_leverage_score=False, **kwargs):
     '''
 
@@ -119,17 +95,17 @@ def recursiveNystrom(K, n_components: int, accelerated_flag=False, random_state=
             ##if sample.size == 0:
                 ##leverage_score[:] = n_components / size_list[l]
                 ##sample = rng.choice(size_list[l], size=n_components, replace=False)
-            weights = np.sqrt(1. / leverage_score[sample])
+            weights = np.sqrt(1. / leverage_score[sample].detach())
 
         else:
             leverage_score = torch.minimum(torch.tensor(1.0), (1 / lmbda) * np.maximum(+0.0, (
-                    k_diag[current_indices, 0] - torch.sum((R * KS).evaluate().detach(), axis=1))))
+                    k_diag[current_indices, 0].detach() - torch.sum((R * KS).evaluate().detach(), axis=1))))
             p = leverage_score/leverage_score.sum()
             sample = p.multinomial(n_components)
         indices = perm[sample]
 
     if return_leverage_score:
-        return indices, leverage_score[np.argsort(perm)]
+        return indices, p[np.argsort(perm)]
     else:
         return indices
 
@@ -155,32 +131,3 @@ def recursiveNystrom(K, n_components: int, accelerated_flag=False, random_state=
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-
-
-# Small check to test if the algorithms output makes sense
-if __name__ == "__main__":
-
-    from tqdm import tqdm
-    import matplotlib.pyplot as plt
-    import scipy.io as sio
-
-    global y
-    n1 = 4000
-    n2 = 20000
-    n3 = 19000
-    n = np.asarray([n1, n2, n3])
-    np.random.seed(10)
-    X = np.concatenate([np.random.multivariate_normal(mean=[50, 10], cov=np.eye(2), size=(n1,)),
-                        np.random.multivariate_normal(mean=[-70, -70], cov=np.eye(2), size=(n2,)),
-                        np.random.multivariate_normal(mean=[90, -40], cov=np.eye(2), size=(n3,))], axis=0)
-    X_tensor = torch.tensor(X)
-    y = np.concatenate([np.ones((n1,)) * 1,
-                        np.ones((n2,)) * 2,
-                        np.ones((n3,)) * 3])
-    idx = np.arange(X.shape[0])
-    np.random.shuffle(idx)
-    X = X[idx]
-    y = y[idx]
-
-    covar = gpytorch.kernels.RBFKernel()
-    K = covar(torch.tensor(X))
