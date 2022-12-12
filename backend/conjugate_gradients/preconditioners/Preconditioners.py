@@ -151,7 +151,7 @@ def rSVD_Preconditioner(self):
         #Z = A @ Omega = Q @ R
         Z = MatmulLinearOperator(self._linear_op, omega)
         
-        Q, R = Z.evaluate().qr()
+        Q, R = torch.linalg.qr( Z.evaluate() )
         
         #Y = Q^T @ A = U @ S @ V
         Y = MatmulLinearOperator(Q.T, self._linear_op)
@@ -196,7 +196,7 @@ def rSVD_Preconditioner_cuda(self):
         #Z = A @ Omega = Q @ R
         Z = MatmulLinearOperator(self._linear_op, omega).cuda()
         
-        Q, R = Z.evaluate().qr()
+        Q, R = torch.linalg.qr( Z.evaluate() )
         
         #Y = Q^T @ A = U @ S @ V
         Y = MatmulLinearOperator(Q.T, self._linear_op).cuda()

@@ -5,7 +5,7 @@ import math
 
 from time import time
 
-from bayesian_benchmarks.bayesian_benchmarks.data import *
+from data.data import *
 from backend.models.regression_model import GPRegressionModel, base_model
 from backend.functions.Functions import GP_nll, exact_log_det
 from backend.conjugate_gradients.preconditioners.Preconditioners import rSVD_Preconditioner, rSVD_Preconditioner_cuda, recursiveNystrom_Preconditioner, Nystrom_Preconditioner
@@ -31,24 +31,3 @@ K = lo.linear_ops[0]
 k = gpytorch.settings.max_preconditioner_size.value()
 index,_ = recursiveNystrom(K, 500, return_leverage_score=True)
 
-p = _[index]
-
-
-L_ = K[:,index].evaluate()
-
-denom = torch.sqrt(p*k)
-
-test = L_/denom
-
-L_small = (test.T@test)
-
-u,s,v = L_small.svd()
-
-L_big = (test@u)
-
-P_ = (L_big/(s ** 0.25))
-P_ = P_@P_.T
-
-P_ = P_ + lo.linear_ops[1]
-
-sys = torch.linalg.inv(P_.evaluate()) @ lo.evaluate()
