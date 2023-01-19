@@ -28,10 +28,6 @@ optim = torch.optim.Adam
 
 base = base_model(train_x, train_y, lhood, gpytorch.means.ConstantMean(), gpytorch.kernels.MaternKernel())
 model = GPRegressionModel(base, lhood, loss_fn, optim, cuda=True)
-base = base_model(train_x, train_y, lhood, gpytorch.means.ConstantMean(), gpytorch.kernels.MaternKernel())
-model_rsvd = GPRegressionModel(base, lhood, loss_fn, optim, cuda=True, precon_override=rSVD_Preconditioner_cuda)
-
-error = []
 
 model.Fit(train_x.cuda(), train_y.cuda(), lr=0.1, iters=50)
 model_rsvd.Fit(train_x.cuda(), train_y.cuda(), lr=0.1, iters=50)
