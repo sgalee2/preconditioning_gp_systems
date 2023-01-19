@@ -22,13 +22,44 @@ def GP_nll(model, likelihood, train_x, target, precon_override=None):
     
     return loss
 
-    
-def exact_log_det(linear_operator):
+
+
+def linop_cholesky(linear_operator):
     
     try:
         L = linear_operator.cholesky()
     except:
         L = torch.linalg.cholesky(linear_operator)
         
+    return L
+
+
+def exact_log_det(L):
+        
     log_det = 2 * sum( torch.log(L.diag()) )
     return log_det.item()
+
+def exact_inv_quad(L, target):
+    
+    "target.T @ K^{-1} @ target = target.T (LL.T)^{-1} @ target"
+    solve = torch.linalg.solve_triangular
+    v = solve(L, target, upper=False)
+    v = solve(L.T, v, upper = True)
+    inv_quad = torch.dot(target.reshape(-1), v.reshape(-1))
+    
+    return inv_quad.item()
+
+def exact_nll(model, likelihood, train_x, target):
+    
+    output = model(train_x)
+    MVN = likelihood(output)
+    tensor, loc = MVN.lazy_covariance_matrix, MVN.loc
+    diff = target - loc 
+    
+    L = linop_cholesky(tensor)
+    
+    inv_quad, log_det = exact_inv_quad(L, diff), exact_log_det(L)
+    ll = -0.5 * sum([inv_quad, log_det, diff.size(-1) * math.log(2 * math.pi)])
+    loss = -ll/diff.size(-1)
+    
+    return loss

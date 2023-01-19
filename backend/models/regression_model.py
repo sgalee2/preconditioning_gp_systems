@@ -48,7 +48,7 @@ class GPRegressionModel(Model):
         
         #need to fix CUDA
         if self.cuda is True:
-            X.to(self.output_device), y.to(self.output_device), self.model.to(self.output_device), self.likelihood.to(self.output_device)
+            X.cuda(), y.cuda(), self.model.cuda(), self.likelihood.cuda()
         
         #set model & likelihood to train mode
         self.model.train()
@@ -124,11 +124,12 @@ class GPRegressionModel(Model):
         noise = self.model.likelihood.noise.detach()
         
         return outputscale.cpu(), lengthscale.cpu(), noise.cpu()
-            
+    
+    def get_exact_nll(self, inputs, targets):
         
+        self.exact_nll = exact_nll(self.model, self.likelihood, inputs, targets)
         
-        
-        
+        return self.exact_nll
         
         
         
