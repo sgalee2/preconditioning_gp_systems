@@ -130,6 +130,16 @@ class GPRegressionModel(Model):
         self.exact_nll = exact_nll(self.model, self.likelihood, inputs, targets)
         
         return self.exact_nll
+    
+    def eval(self):
+        self.model.eval()
+        self.likelihood.eval()
+        print("Evaluation mode")
+        
+    def train(self):
+        self.model.train()
+        self.likelihood.train()
+        print("Training mode")
         
         
         

@@ -37,7 +37,7 @@ def linop_cholesky(linear_operator):
 def exact_log_det(L):
         
     log_det = 2 * sum( torch.log(L.diag()) )
-    return log_det.item()
+    return log_det
 
 def exact_inv_quad(L, target):
     
@@ -47,9 +47,9 @@ def exact_inv_quad(L, target):
     v = solve(L.T, v, upper = True)
     inv_quad = torch.dot(target.reshape(-1), v.reshape(-1))
     
-    return inv_quad.item()
+    return inv_quad
 
-def exact_nll(model, likelihood, train_x, target):
+def exact_GP_nll(model, likelihood, train_x, target, *params):
     
     output = model(train_x)
     MVN = likelihood(output)

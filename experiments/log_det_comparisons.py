@@ -14,4 +14,6 @@ from backend.conjugate_gradients.preconditioners.Preconditioners import rSVD_Pre
 from torch.utils.data import Dataset
 
 
-model = base_model()
+for i in datasets:
+    df = get_regression_data(i)
+    print("Data-set:", i,",", "N =", df.N, "D =", df.D)
