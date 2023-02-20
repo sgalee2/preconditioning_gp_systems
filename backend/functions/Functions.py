@@ -5,6 +5,18 @@ from gpytorch.distributions import MultivariateNormal
 from linear_operator.operators import AddedDiagLinearOperator, DiagLinearOperator, RootLinearOperator
 from backend.conjugate_gradients.preconditioners.Preconditioners import Eig_Preconditioner, rSVD_Preconditioner, rSVD_Preconditioner_cuda
 
+def linop_logdet(linear_operator, target=None):
+    
+    n = linear_operator.size[0]
+    
+    if target is None:
+        target = torch.rand([n,1])
+    
+    _, log_det = linear_operator.inv_quad_log_det(target, logdet=True)
+    
+    return log_det
+    
+
 def GP_nll(model, likelihood, train_x, target, precon_override=None):
     
     output = model(train_x)
