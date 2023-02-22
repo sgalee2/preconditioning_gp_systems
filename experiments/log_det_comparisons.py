@@ -61,28 +61,35 @@ def exact_log_det_K(lin_op):
 
 if __name__ == '__main__':
     print("Running log_det comparisons. . .\n")
-    datasets = ['yacht', 'boston', 'energy', 'concrete', 'winered', 'winewhite', 'parkinsons', 'power', 'naval', 'protein']
-    covariances = [gpytorch.kernels.RBFKernel(), gpytorch.kernels.MaternKernel()]
+    datasets = ['winered', 'winewhite', 'parkinsons', 'power', 'naval']
+    covariances = [gpytorch.kernels.RBFKernel(), gpytorch.kernels.MaternKernel(nu=0.5)]
+    covariances_named = ['RBF kernel', 'Matern 0.5 kernel']
+    precon_named = ['Pivoted Cholesky', 'Randomised SVD', 'Recursive Nystrom']
     
     for i in datasets:
         print("Testing on data-set:",i)
         
         train_x, train_y, N, D = train_data_loader(i)
         
-        fig, ((ax1, ax2)) = plt.subplots(2, figsize=[12,10], sharey=True)
-        fig.suptitle('Comparing error in preconditioner log-det')
+        num_figs = len(covariances)
+        
+        fig, ((ax1, ax2)) = plt.subplots(num_figs, figsize=[12,10], sharey=True)
+        fig.suptitle('Comparing error in preconditioner log-det for ' + i)
+        fig.supylabel('$|\log|\hat{K}| - \log|\hat{P}||$')
+        fig.supxlabel('Preconditioner Quality')
         
         for kernels in enumerate(covariances):
-        
+            
+            print("Tests using kernel:", kernels[1], "\n")
             model, likelihood = define_model(gpytorch.means.ZeroMean(), kernels[1])
+            likelihood.noise = 1.
             
             if N <= 10000:
                 l_det_K = exact_log_det_K(model_likelihood_covariance(train_x))
             else:
-                #l_det_K = model_likelihood_covariance(train_x).logdet()
-                pass
+                l_det_K = model_likelihood_covariance(train_x).logdet()
             
-            max_rank = min(train_x.shape[0], 500)
+            max_rank = min(train_x.shape[0], 200)
             
             precon_ldets = torch.zeros([max_rank, 3])
             for j in range(2, max_rank):
@@ -94,11 +101,11 @@ if __name__ == '__main__':
                         precon_ldets[j,2] += precon_log_det(cov, recursiveNystrom_Preconditioner)
                     precon_ldets[j,2] = precon_ldets[j,2]/10
             error = abs(precon_ldets[2:] - l_det_K)
-            for plot in range(3):
-                fig.get_axes()[kernels[0]].plot(error[:,i].detach())
-        
-        break
-            
+            for plot_ in range(3):
+                fig.get_axes()[kernels[0]].plot(error[:,plot_].detach(), label=precon_named[plot_])
+                fig.get_axes()[kernels[0]].legend()
+                
+            fig.get_axes()[kernels[0]].set_title(covariances_named[kernels[0]])
         
         
         
