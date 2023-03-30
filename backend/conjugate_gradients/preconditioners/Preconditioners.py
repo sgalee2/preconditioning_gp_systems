@@ -12,12 +12,16 @@ def Pivoted_Cholesky(self):
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     
+    device = self._linear_op.device
+    
     if self._q_cache is None:
         
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
-        
+
         #set the L factor & add it into GPyTorch language
-        lin_op_added_diag = self._linear_op + 0.0001 * torch.eye(n)
+        
+        lin_op_added_diag = self._linear_op + 0.0001 * torch.eye(n).to(device)
+
         L = lin_op_added_diag.pivoted_cholesky(k, error_tol=1e-8)
         self._piv_chol_self = L
         if torch.any(torch.isnan(self._piv_chol_self)).item():
@@ -129,14 +133,17 @@ def recursiveNystrom_Preconditioner(self):
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     
+    device = self._linear_op.device
+    
     if self._q_cache is None:
         
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
-        indices = recursiveNystrom(self._linear_op, k)
+        indices = recursiveNystrom(self._linear_op, k).to(device)
         KS = self._linear_op[:, indices]
-        SKS = KS[indices,:]
+        SKS = KS[indices,:].evaluate()
+        reg_ = SKS + 10e-4*torch.eye(k)
         
-        L_ = torch.linalg.cholesky(SKS.evaluate() + 10e-4*torch.eye(k))
+        L_ = torch.linalg.cholesky(reg_)
         L_ = torch.linalg.inv(L_.T)
         
         KSL = KS @ L_
@@ -170,13 +177,15 @@ def rSVD_Preconditioner(self):
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     
+    device = self._linear_op.device
+    
     if self._q_cache is None:
         
         from linear_operator.operators import MatmulLinearOperator
         
         #get quantities & form sample matrix
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
-        omega = torch.distributions.normal.Normal(0.,1.).sample([n, k])
+        omega = torch.distributions.normal.Normal(0.,1.).sample([n, k]).to(device)
         
         #Z = A @ Omega = Q @ R
         Z = MatmulLinearOperator(self._linear_op, omega)
@@ -210,8 +219,7 @@ def rSVD_Preconditioner(self):
 
     return (precondition_closure, self._precond_lt, self._precond_logdet_cache)
         
-def rSVD_Preconditioner_cuda(self):
-    print("using rsvd")    
+def rSVD_Preconditioner_cuda(self): 
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     

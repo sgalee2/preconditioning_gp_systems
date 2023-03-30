@@ -1,9 +1,11 @@
 import startup
+
+from all_params import *
+
 import gpytorch
 import torch
-import math
 
-from time import time
+from torch.utils.data import Dataset
 
 from bayesian_benchmarks.bayesian_benchmarks.data import *
 from backend.models.regression_model import GPRegressionModel, base_model
@@ -11,28 +13,104 @@ from backend.functions.Functions import *
 from backend.conjugate_gradients.preconditioners.Preconditioners import rSVD_Preconditioner, rSVD_Preconditioner_cuda, recursiveNystrom_Preconditioner, Nystrom_Preconditioner, Pivoted_Cholesky
 from backend.sampling.recursive_nystrom_gpytorch import recursiveNystrom
 
-gpytorch.settings.max_preconditioner_size._set_value(100)
 gpytorch.settings.min_preconditioning_size._set_value(0)
 gpytorch.settings.cg_tolerance._set_value(0.1)
-gpytorch.settings.preconditioner_tolerance._set_value(1e-6)
 
-df = get_regression_data('energy')
+def train_data_loader(data_title):
+    
+    df = get_regression_data(data_title)
 
-train_x, train_y = df.X_train, df.Y_train
+    train_x, train_y, N, D = df.X_train, df.Y_train, df.N, df.D
+    
+    return train_x, train_y, N, D
 
-lhood = gpytorch.likelihoods.GaussianLikelihood()
-loss_fn = GP_nll
-optim = torch.optim.Adam
+def data_to_cuda(train_x, train_y):
+    train_x = train_x.cuda()
+    train_y = train_y.cuda()
+    return train_x, train_y
 
-base = base_model(train_x, train_y, lhood, gpytorch.means.ConstantMean(), gpytorch.kernels.MaternKernel())
-model = GPRegressionModel(base, lhood, loss_fn, optim)
+def data_to_cpu(train_x, train_y):
+    train_x = train_x.cpu()
+    train_y = train_y.cpu()
+    return train_x, train_y
 
-base_op = base(train_x).lazy_covariance_matrix 
-lin_op = lhood(base(train_x)).lazy_covariance_matrix
-ldet = exact_log_det(linop_cholesky(lin_op))
-ldets = []
+def define_model(mean_module, cov_module):
+    
+    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    model = base_model(train_x, train_y, likelihood, mean_module, cov_module)
+    
+    return model, likelihood
 
-max_rank = min(int(0.9*df.N - 1), 50)
+def model_to_cuda(model, likelihood):
+    model = model.cuda()
+    likelihood = likelihood.cuda()
+    return model, likelihood
 
-train_x, train_y, likelihood, model = train_x.cuda(), train_y.cuda(), lhood.cuda(), base.cuda()
-cov = likelihood(model(train_x)).lazy_covariance_matrix
+def model_to_cpu(model, likelihood):
+    model = model.cpu()
+    likelihood = likelihood.cpu()
+    return model, likelihood
+
+def model_likelihood_covariance(location, preconditioner = None):
+    
+    loc_likelihood = likelihood(model(location))
+    lin_op = loc_likelihood.lazy_covariance_matrix
+    
+    if preconditioner is not None:
+        lin_op.preconditioner_override = preconditioner
+        
+    return lin_op
+
+def precon_matmul(lin_op, vec):
+    
+    lin_op._q_cache = None
+    precon_func = lin_op._preconditioner()[0]
+    sol = precon_func(vec)
+    return sol
+
+def time_solve(lin_op, vec):
+    
+    from time import time
+    
+    t1 = time()
+    sol = precon_matmul(lin_op, vec)
+    t_sol = time() - t1
+    
+    return sol, t_sol
+    
+if __name__ == '__main__':
+    
+    
+    print("Testing preconditioner formation and computation times \n")
+    
+    preconditioners = [Pivoted_Cholesky, rSVD_Preconditioner, rSVD_Preconditioner_cuda, Pivoted_Cholesky]
+    precon_names = ['Pivoted Cholesky', 'Randomised SVD', 'Randomised SVD CUDA', 'Pivoted Cholesky CUDA']
+    
+    train_x, train_y, N, D = train_data_loader('naval')
+    model, likelihood = define_model(gpytorch.means.ConstantMean(), gpytorch.kernels.MaternKernel(0.5))
+    
+    trials = 2
+    times = torch.zeros(trials, 4)
+    j = 0
+    
+    for i in range(trials):
+        
+        for precons in enumerate(preconditioners):
+        
+            train_x, train_y = data_to_cuda(train_x, train_y)
+            model, likelihood = model_to_cuda(model, likelihood)
+            
+            with gpytorch.settings.max_preconditioner_size(3000):
+                cov = model_likelihood_covariance(train_x, preconditioner=precons[1])
+                sol, t_sol = time_solve(cov, train_y[0])
+                times[i,j] = t_sol
+                torch.cuda.empty_cache()
+            j += 1
+    
+    
+    
+    
+    
+    
+    
+    

@@ -43,9 +43,9 @@ def recursiveNystrom(K, n_components: int, accelerated_flag=False, random_state=
 
     # we need the diagonal of the whole kernel matrix, so compute upfront
     try:
-        k_diag = K.diag().reshape(-1,1)
+        k_diag = K.diag().reshape(-1,1).to(torch.device('cpu'))
     except:
-        k_diag = torch.diag(K).reshape(-1,1)
+        k_diag = torch.diag(K).reshape(-1,1).to(torch.device('cpu'))
     rec = 0
     # Main recursion, unrolled for efficiency
     for l in reversed(range(n_levels)):
@@ -57,10 +57,10 @@ def recursiveNystrom(K, n_components: int, accelerated_flag=False, random_state=
         #try:
             #KS = K[current_indices, :][:, indices].evaluate()
         #except:
-        KS = K[current_indices, :][:, indices]
+        KS = K[current_indices, :][:, indices].to(torch.device('cpu'))
             
             
-        SKS = KS[sample, :].evaluate().detach() # sampled rows and sampled columns
+        SKS = KS[sample, :].evaluate().detach().to(torch.device('cpu')) # sampled rows and sampled columns
         
         # optimal lambda for taking O(k log(k)) samples
         if k >= SKS.shape[0]:

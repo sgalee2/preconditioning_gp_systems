@@ -12,8 +12,6 @@ from all_params import *
 import gpytorch
 import torch
 
-from time import time
-
 from torch.utils.data import Dataset
 
 from bayesian_benchmarks.bayesian_benchmarks.data import *
@@ -21,6 +19,9 @@ from backend.models.regression_model import GPRegressionModel, base_model
 from backend.functions.Functions import *
 from backend.conjugate_gradients.preconditioners.Preconditioners import rSVD_Preconditioner, rSVD_Preconditioner_cuda, recursiveNystrom_Preconditioner, Nystrom_Preconditioner, Pivoted_Cholesky
 from backend.sampling.recursive_nystrom_gpytorch import recursiveNystrom
+
+gpytorch.settings.min_preconditioning_size._set_value(0)
+gpytorch.settings.cg_tolerance._set_value(0.1)
 
 def train_data_loader(data_title):
     
@@ -30,18 +31,31 @@ def train_data_loader(data_title):
     
     return train_x, train_y, N, D
 
-def data_to_cuda(train_x, train_y, model, likelihood):
-    model = model.cuda()
-    likelihood = likelihood.cuda()
+def data_to_cuda(train_x, train_y):
     train_x = train_x.cuda()
-    train_y = train_y.cuda
-    return train_x, train_y, model, likelihood
+    train_y = train_y.cuda()
+    return train_x, train_y
+
+def data_to_cpu(train_x, train_y):
+    train_x = train_x.cpu()
+    train_y = train_y.cpu()
+    return train_x, train_y
 
 def define_model(mean_module, cov_module):
     
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
     model = base_model(train_x, train_y, likelihood, mean_module, cov_module)
     
+    return model, likelihood
+
+def model_to_cuda(model, likelihood):
+    model = model.cuda()
+    likelihood = likelihood.cuda()
+    return model, likelihood
+
+def model_to_cpu(model, likelihood):
+    model = model.cpu()
+    likelihood = likelihood.cpu()
     return model, likelihood
 
 def model_likelihood_covariance(location, preconditioner = None):
@@ -56,12 +70,70 @@ def model_likelihood_covariance(location, preconditioner = None):
 
 def precon_matmul(lin_op, vec):
     
+    lin_op._q_cache = None
     precon_func = lin_op._preconditioner()[0]
-    sol = precon_fun(vec)
+    sol = precon_func(vec)
     return sol
+
+def time_solve(lin_op, vec):
+    
+    from time import time
+    
+    t1 = time()
+    sol = precon_matmul(lin_op, vec)
+    t_sol = time() - t1
+    
+    return sol, t_sol
     
 if __name__ == '__main__':
     
     print("Testing preconditioner formation and computation times \n")
     
-    preconditioners = [Pivoted_Cholesky, rSVD_Preconditioner, recursiveNystrom_Preconditioner, rSVD_Preconditioner_cuda]
+    preconditioners = [Pivoted_Cholesky, rSVD_Preconditioner, rSVD_Preconditioner_cuda, Pivoted_Cholesky]
+    precon_names = ['Pivoted Cholesky', 'Randomised SVD', 'Randomised SVD CUDA', 'Pivoted Cholesky CUDA']
+    trials = 100
+    times = torch.zeros(len(preconditioners),trials)
+    
+    train_x, train_y, N, D = train_data_loader('naval')
+    model, likelihood = define_model(gpytorch.means.ConstantMean(), gpytorch.kernels.RBFKernel())
+    
+    trial_range = 10*torch.arange(trials)
+    trial_range[0] = 2
+    j = 0
+    
+    for i in trial_range:
+        
+        print("Setting rank to", i.item())
+        
+        for precons in enumerate(preconditioners):
+            
+            if precons[0] > 1:
+                train_x, train_y = data_to_cuda(train_x, train_y)
+                model, likelihood = model_to_cuda(model, likelihood)
+            else:
+                train_x, train_y = data_to_cpu(train_x, train_y)
+                model, likelihood = model_to_cpu(model, likelihood)
+            
+            with gpytorch.settings.max_preconditioner_size(i.item()):
+                
+                cov = model_likelihood_covariance(train_x, preconditioner=precons[1])
+                sol, t_sol = time_solve(cov, train_y[0])
+                times[precons[0], j] = t_sol
+                torch.cuda.empty_cache()
+        j += 1
+    
+    import matplotlib.pyplot as plt        
+    for i in range(len(preconditioners)):
+        plt.scatter(trial_range, times[i], marker = '.', label = precon_names[i])
+    plt.legend()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

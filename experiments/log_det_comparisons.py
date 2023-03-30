@@ -4,8 +4,11 @@ from all_params import *
 
 import gpytorch
 import torch
+import argparse
+import os
 
 from time import time
+from pathlib import Path
 
 from torch.utils.data import Dataset
 
@@ -28,14 +31,14 @@ def train_data_loader(data_title):
     
     return train_x, train_y, N, D
 
-def define_model(mean_module, cov_module):
+def define_model(train_x, train_y, mean_module, cov_module):
     
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
     model = base_model(train_x, train_y, likelihood, mean_module, cov_module)
     
     return model, likelihood
 
-def model_likelihood_covariance(location, preconditioner = None):
+def model_likelihood_covariance(model, likelihood, location, preconditioner = None):
     
     loc_likelihood = likelihood(model(location))
     lin_op = loc_likelihood.lazy_covariance_matrix
@@ -59,55 +62,86 @@ def exact_log_det_K(lin_op):
     
     return exact_log_det(L)
 
-if __name__ == '__main__':
-    print("Running log_det comparisons. . .\n")
-    datasets = ['winered', 'winewhite', 'parkinsons', 'power', 'naval']
-    covariances = [gpytorch.kernels.RBFKernel(), gpytorch.kernels.MaternKernel(nu=0.5)]
-    covariances_named = ['RBF kernel', 'Matern 0.5 kernel']
-    precon_named = ['Pivoted Cholesky', 'Randomised SVD', 'Recursive Nystrom']
+def compute_preconditioner_logdet(dataset, mean_module, cov_module, precons, precon_rank, hypers):
     
-    for i in datasets:
-        print("Testing on data-set:",i)
+    
+    train_x, train_y, N, _ = train_data_loader(dataset)
+    
+    mean_module, cov_module = mean_module(), cov_module(ard_num_dims=train_x.shape[1])
+    model, likelihood = define_model(train_x, train_y, mean_module, cov_module)
+    model.initialize(**hypers)
+    
+    if N <= 10000:
+        l_det_K = exact_log_det_K(model_likelihood_covariance(model, likelihood, train_x))
+    else:
+        l_det_K = model_likelihood_covariance(model, likelihood, train_x).logdet()
         
-        train_x, train_y, N, D = train_data_loader(i)
+    precon_ldets = [l_det_K.item()]
+    
+    for precon in precons:
+        with gpytorch.settings.max_preconditioner_size(precon_rank):
+            cov = model_likelihood_covariance(model, likelihood, train_x)
+            precon_ldets.append(precon_log_det(cov, precon=precon))
+    return precon_ldets
+
+class demo:
+    
+    def __init__(self, args):
         
-        num_figs = len(covariances)
+        self.args = args
         
-        fig, ((ax1, ax2)) = plt.subplots(num_figs, figsize=[12,10], sharey=True)
-        fig.suptitle('Comparing error in preconditioner log-det for ' + i)
-        fig.supylabel('$|\log|\hat{K}| - \log|\hat{P}||$')
-        fig.supxlabel('Preconditioner Quality')
-        
-        for kernels in enumerate(covariances):
+        if args.mean == 'zero':
+            self.mean_module = gpytorch.means.ZeroMean
             
-            print("Tests using kernel:", kernels[1], "\n")
-            model, likelihood = define_model(gpytorch.means.ZeroMean(), kernels[1])
-            likelihood.noise = 1.
+        if args.mean == 'constant':
+            self.mean_module = gpytorch.means.ConstantMean
             
-            if N <= 10000:
-                l_det_K = exact_log_det_K(model_likelihood_covariance(train_x))
-            else:
-                l_det_K = model_likelihood_covariance(train_x).logdet()
+        if args.kernel == 'rbf':
+            self.covar_module = gpytorch.kernels.RBFKernel
             
-            max_rank = min(train_x.shape[0], 200)
+        if args.kernel == 'matern':
+            self.covar_module = gpytorch.kernels.MaternKernel
+        
+        self.hypers = {
+             'likelihood.noise': torch.tensor(1.),
+             'covar_module.lengthscale': torch.tensor(0.5),}
+        
+        if args.save:
+            save_path = '../results' + '/%s' % args.dataset
+            os.makedirs(save_path, exist_ok=True)
+            self.save_path = os.path.join(save_path, Path(args.kernel).stem + '_' + Path(str(args.max_rank)).stem + '.t')
             
-            precon_ldets = torch.zeros([max_rank, 3])
-            for j in range(2, max_rank):
-                with gpytorch.settings.max_preconditioner_size(j):
-                    cov = model_likelihood_covariance(train_x)
-                    precon_ldets[j,0] = precon_log_det(cov)
-                    precon_ldets[j,1] = precon_log_det(cov, rSVD_Preconditioner)
-                    for k in range(10):
-                        precon_ldets[j,2] += precon_log_det(cov, recursiveNystrom_Preconditioner)
-                    precon_ldets[j,2] = precon_ldets[j,2]/10
-            error = abs(precon_ldets[2:] - l_det_K)
-            for plot_ in range(3):
-                fig.get_axes()[kernels[0]].plot(error[:,plot_].detach(), label=precon_named[plot_])
-                fig.get_axes()[kernels[0]].legend()
-                
-            fig.get_axes()[kernels[0]].set_title(covariances_named[kernels[0]])
+            
+    def run(self, precons):
         
+        print("==> Running log_det tests for",args.dataset)
+        results = torch.zeros([self.args.max_rank-1, len(precons)+1])
+        for i in range(2, self.args.max_rank+1):
+            if i%10 == 0:
+                print("==> Testing for precon rank " + "%s/{}".format(self.args.max_rank) % i)
+            results[i-2] = torch.tensor( compute_preconditioner_logdet(self.args.dataset, self.mean_module, self.covar_module, precons, i, self.hypers) )
+            
+        if self.args.save:
+            torch.save([self.args, [precons[i].__name__ for i in range(len(precons))], results], self.save_path)
+            
+        return results
+
+    
         
+    
         
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, choices=datasets, default='yacht')
+    parser.add_argument("--mean", type=str, choices=['zero', 'constant'], default='zero')
+    parser.add_argument("--kernel", type=str, choices=['rbf', 'matern'], default='rbf')
+    parser.add_argument("--max_rank", type=int, default=20)
+    parser.add_argument("--save", type=bool, default=False)
         
-        
+    args = parser.parse_args()
+    precons = [Pivoted_Cholesky, rSVD_Preconditioner, recursiveNystrom_Preconditioner]
+    
+    Demo = demo(args)
+    res = Demo.run(precons)
+
+

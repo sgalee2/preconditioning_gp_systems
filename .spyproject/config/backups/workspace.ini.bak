@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['backend\\models\\regression_model.py', 'backend\\functions\\Functions.py', 'experiments\\all_params.py', 'experiments\\benchmarks.py', 'backend\\conjugate_gradients\\preconditioners\\Preconditioners.py', 'data\\data.py', 'experiments\\log_det_comparisons.py', 'experiments\\test.py']
+recent_files = ['backend\\models\\regression_model.py', 'backend\\functions\\Functions.py', 'experiments\\all_params.py', 'backend\\conjugate_gradients\\preconditioners\\Preconditioners.py', 'experiments\\benchmarks.py', 'data\\data.py', 'experiments\\log_det_comparisons.py', 'experiments\\precon_form_time_comparisons.py', 'experiments\\test.py']
 
 [main]
 version = 0.2.0
