@@ -62,7 +62,7 @@ def exact_log_det_K(lin_op):
     
     return exact_log_det(L)
 
-def compute_preconditioner_logdet(dataset, mean_module, cov_module, precons, precon_rank, hypers):
+def compute_preconditioner_logdet(dataset, mean_module, cov_module, precons, precon_rank, hypers, cuda):
     
     
     train_x, train_y, N, _ = train_data_loader(dataset)
@@ -70,6 +70,9 @@ def compute_preconditioner_logdet(dataset, mean_module, cov_module, precons, pre
     mean_module, cov_module = mean_module(), cov_module(ard_num_dims=train_x.shape[1])
     model, likelihood = define_model(train_x, train_y, mean_module, cov_module)
     model.initialize(**hypers)
+    
+    if cuda:
+        train_x, train_y, model, likelihood = train_x.cuda(), train_y.cuda(), model.cuda(), likelihood.cuda()
     
     if N <= 10000:
         l_det_K = exact_log_det_K(model_likelihood_covariance(model, likelihood, train_x))
@@ -107,19 +110,25 @@ class demo:
              'covar_module.lengthscale': torch.tensor(0.5),}
         
         if args.save:
-            save_path = '../results' + '/%s' % args.dataset
+            save_path = 'results/log_dets' + '/%s' % args.dataset
             os.makedirs(save_path, exist_ok=True)
             self.save_path = os.path.join(save_path, Path(args.kernel).stem + '_' + Path(str(args.max_rank)).stem + '.t')
             
             
     def run(self, precons):
         
+        if self.args.cuda:
+            try:
+                precons.remove(recursiveNystrom_Preconditioner)
+            except:
+                pass
+        
         print("==> Running log_det tests for",args.dataset)
         results = torch.zeros([self.args.max_rank-1, len(precons)+1])
         for i in range(2, self.args.max_rank+1):
             if i%10 == 0:
                 print("==> Testing for precon rank " + "%s/{}".format(self.args.max_rank) % i)
-            results[i-2] = torch.tensor( compute_preconditioner_logdet(self.args.dataset, self.mean_module, self.covar_module, precons, i, self.hypers) )
+            results[i-2] = torch.tensor( compute_preconditioner_logdet(self.args.dataset, self.mean_module, self.covar_module, precons, i, self.hypers, self.args.cuda) )
             
         if self.args.save:
             torch.save([self.args, [precons[i].__name__ for i in range(len(precons))], results], self.save_path)
@@ -137,11 +146,13 @@ if __name__ == '__main__':
     parser.add_argument("--kernel", type=str, choices=['rbf', 'matern'], default='rbf')
     parser.add_argument("--max_rank", type=int, default=20)
     parser.add_argument("--save", type=bool, default=False)
+    parser.add_argument("--cuda", type=bool, default=False)
         
     args = parser.parse_args()
     precons = [Pivoted_Cholesky, rSVD_Preconditioner, recursiveNystrom_Preconditioner]
     
     Demo = demo(args)
+    
     res = Demo.run(precons)
 
 

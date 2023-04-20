@@ -88,10 +88,12 @@ def Nystrom_Preconditioner(self):
     if gpytorch.settings.max_preconditioner_size.value() == 0 or self.size(-1) < gpytorch.settings.min_preconditioning_size.value():
         return None, None, None
     
+    device = self._linear_op.device
+    
     if self._q_cache is None:
         
         n, k = self.shape[0], gpytorch.settings.max_preconditioner_size.value()
-        indices = torch.randint(low=0, high=n, size=[k])
+        indices = torch.randint(low=0, high=n, size=[k]).to(device)
         KS = self._linear_op[:, indices]
         SKS = KS[indices,:]
         
